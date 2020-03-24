@@ -11,14 +11,7 @@
   "isOpenLocal": true,
   "controllerName": "com.test.jpa.controller.UserInfoController",
   "methodName": "getUserInfos",
-  "dataDictionaries": [
-    {
-      "title": "title",
-      "enumClassName": "com.data.Enum",
-      "codeField": "codeField",
-      "descField": "descField"
-    }
-  ],
+  "docLanguage": "zh-CN",
   "errorCodeDictionaries": [
     {
       "title": "title",

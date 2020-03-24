@@ -3,6 +3,7 @@ package com.july.doc.mojo;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.july.doc.JulyDoc;
+import com.july.doc.config.DocLanguage;
 import com.july.doc.constant.GlobalConstants;
 import com.july.doc.entity.ApiConfig;
 import com.july.doc.entity.SourceCodePath;
@@ -11,6 +12,7 @@ import com.july.doc.showdoc.ShowDoc;
 import com.july.doc.showdoc.ShowDocModel;
 import com.july.doc.utils.CollectionUtil;
 import com.july.doc.utils.FileUtil;
+import com.july.doc.utils.StringUtil;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -42,10 +44,12 @@ public class MarkdownMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         List<String> sourceRoots = project.getCompileSourceRoots();
-
         try{
             String data = FileUtil.getFileContent(new FileInputStream(configFile));
             ApiConfig apiConfig = JSON.parseObject(data, ApiConfig.class);
+            if(StringUtil.isNotEmpty(apiConfig.getDocLanguage())){
+                apiConfig.setLanguage(apiConfig.getDocLanguage().equals(DocLanguage.CHINESE.getCode()) ? DocLanguage.CHINESE : DocLanguage.ENGLISH);
+            }
             apiConfig.setSourceCodePath(SourceCodePath.path().setPath(CollectionUtil.isEmpty(sourceRoots) ? "src/main/java" : sourceRoots.get(0)));
             //获取所有的Markdown文件
             List<ShowDocModel> showDocModels = JulyDoc.generateOneApi(apiConfig);
