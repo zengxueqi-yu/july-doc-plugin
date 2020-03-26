@@ -7,6 +7,11 @@
       <option name="url" value="https://repo1.maven.org/maven2" />
     </remote-repository>
     <remote-repository>
+      <option name="id" value="sonatype-nexus-snapshots" />
+      <option name="name" value="Sonatype Nexus Snapshots" />
+      <option name="url" value="https://oss.sonatype.org/content/repositories/snapshots" />
+    </remote-repository>
+    <remote-repository>
       <option name="id" value="maven-public" />
       <option name="name" value="maven-public" />
       <option name="url" value="http://nexus.sjhh-inner.com/nexus/repository/maven-public/" />
@@ -15,6 +20,16 @@
       <option name="id" value="central" />
       <option name="name" value="Central Repository" />
       <option name="url" value="http://nexus.sjhh-inner.com/nexus/repository/maven-public/" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="nexus-snapshots" />
+      <option name="name" value="Nexus Release Repository" />
+      <option name="url" value="http://nexus.sjhh-inner.com/nexus/repository/maven-snapshots/" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="nexus-releases" />
+      <option name="name" value="Nexus Release Repository" />
+      <option name="url" value="http://nexus.sjhh-inner.com/nexus/repository/maven-releases/" />
     </remote-repository>
     <remote-repository>
       <option name="id" value="jboss.community" />
