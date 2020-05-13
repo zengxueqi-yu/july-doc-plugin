@@ -8,6 +8,7 @@ import com.july.doc.entity.ApiConfig;
 import com.july.doc.entity.ApiDataDictionary;
 import com.july.doc.entity.ApiErrorCodeDictionary;
 import com.july.doc.entity.SourceCodePath;
+import com.july.doc.utils.CollectionUtil;
 import com.july.doc.utils.FileUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -42,7 +43,6 @@ public class MojoUtils {
 
     /**
      * Build ApiConfig
-     *
      * @param configFile  config file
      * @param projectName project name
      * @param project     Maven project object
@@ -57,21 +57,15 @@ public class MojoUtils {
             ApiConfig apiConfig = GSON.fromJson(data, ApiConfig.class);
             List<ApiDataDictionary> apiDataDictionaries = apiConfig.getDataDictionaries();
             List<ApiErrorCodeDictionary> apiErrorCodes = apiConfig.getErrorCodeDictionaries();
-            if (apiErrorCodes != null) {
-                apiErrorCodes.forEach(
-                        apiErrorCode -> {
-                            String className = apiErrorCode.getEnumClassName();
-                            apiErrorCode.setEnumClass(getClassByClassName(className, classLoader));
-                        }
-                );
+            if (CollectionUtil.isNotEmpty(apiErrorCodes)) {
+                apiErrorCodes.forEach(apiErrorCode -> {
+                    apiErrorCode.setEnumClass(getClassByClassName(apiErrorCode.getEnumClassName(), classLoader));
+                });
             }
-            if (apiDataDictionaries != null) {
-                apiDataDictionaries.forEach(
-                        apiDataDictionary -> {
-                            String className = apiDataDictionary.getEnumClassName();
-                            apiDataDictionary.setEnumClass(getClassByClassName(className, classLoader));
-                        }
-                );
+            if (CollectionUtil.isNotEmpty(apiDataDictionaries)) {
+                apiDataDictionaries.stream().forEach(apiDataDictionary -> {
+                    apiDataDictionary.setEnumClass(getClassByClassName(apiDataDictionary.getEnumClassName(), classLoader));
+                });
             }
             if (StringUtils.isBlank(apiConfig.getProjectName())) {
                 apiConfig.setProjectName(projectName);
@@ -87,7 +81,6 @@ public class MojoUtils {
 
     /**
      * 根据 com.xxx.AClass获取类Class
-     *
      * @param className   类名
      * @param classLoader urls
      * @return 类类型
@@ -102,8 +95,7 @@ public class MojoUtils {
     }
 
     private static void addSourcePaths(MavenProject project, ApiConfig apiConfig, Log log) {
-        List<String> sourceRoots = project.getCompileSourceRoots();
-        sourceRoots.forEach(s -> apiConfig.setSourceCodePath(SourceCodePath.path().setPath(s)));
+        project.getCompileSourceRoots().stream().forEach(s -> apiConfig.setSourceCodePath(SourceCodePath.path().setPath(s)));
         if (project.hasParent()) {
             MavenProject mavenProject = project.getParent();
             if (null != mavenProject) {

@@ -7,6 +7,7 @@ import com.july.doc.entity.ApiDataDictionary;
 import com.july.doc.entity.ApiErrorCodeDictionary;
 import com.july.doc.entity.SourceCodePath;
 import com.july.doc.util.ClassLoaderUtil;
+import com.july.doc.util.RegexUtils;
 import com.july.doc.utils.CollectionUtil;
 import com.july.doc.utils.FileUtil;
 import com.thoughtworks.qdox.JavaProjectBuilder;
@@ -35,10 +36,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -54,8 +52,14 @@ public abstract class BaseMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
+    /**
+     * 指定生成文档的使用的配置文件,配置文件放在自己的项目中
+     */
     @Parameter(property = "configFile", defaultValue = GlobalConstants.DEFAULT_CONFIG)
     private File configFile;
+    /**
+     * 指定项目名称
+     */
     @Parameter(property = "projectName")
     private String projectName;
     @Parameter(property = "scope")
@@ -70,8 +74,16 @@ public abstract class BaseMojo extends AbstractMojo {
     protected RepositorySystem repositorySystem;
     private DependencyNode rootNode;
     protected JavaProjectBuilder javaProjectBuilder;
+    /**
+     * 使用excludes排除掉指定的依赖
+     */
     @Parameter(required = false)
-    private List excludes;
+    private Set excludes;
+    /**
+     * 使用includes来让插件加载你配置的组件
+     */
+    @Parameter(required = false)
+    private Set includes;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -94,6 +106,16 @@ public abstract class BaseMojo extends AbstractMojo {
     public abstract void executeMojo(ApiConfig apiConfig, JavaProjectBuilder javaProjectBuilder)
             throws MojoExecutionException, MojoFailureException;
 
+    /**
+     * 构建Api Doc配置
+     * @param configFile
+     * @param projectName
+     * @param project
+     * @param log
+     * @return com.july.doc.entity.ApiConfig
+     * @author zengxueqi
+     * @since 2020/5/13
+     */
     public static ApiConfig buildConfig(File configFile, String projectName, MavenProject project, Log log) throws MojoExecutionException {
         try {
             ClassLoader classLoader = ClassLoaderUtil.getRuntimeClassLoader(project);
@@ -102,20 +124,14 @@ public abstract class BaseMojo extends AbstractMojo {
             List<ApiDataDictionary> apiDataDictionaries = apiConfig.getDataDictionaries();
             List<ApiErrorCodeDictionary> apiErrorCodes = apiConfig.getErrorCodeDictionaries();
             if (apiErrorCodes != null) {
-                apiErrorCodes.forEach(
-                        apiErrorCode -> {
-                            String className = apiErrorCode.getEnumClassName();
-                            apiErrorCode.setEnumClass(getClassByClassName(className, classLoader));
-                        }
-                );
+                apiErrorCodes.stream().forEach(apiErrorCode -> {
+                    apiErrorCode.setEnumClass(getClassByClassName(apiErrorCode.getEnumClassName(), classLoader));
+                });
             }
             if (apiDataDictionaries != null) {
-                apiDataDictionaries.forEach(
-                        apiDataDictionary -> {
-                            String className = apiDataDictionary.getEnumClassName();
-                            apiDataDictionary.setEnumClass(getClassByClassName(className, classLoader));
-                        }
-                );
+                apiDataDictionaries.stream().forEach(apiDataDictionary -> {
+                    apiDataDictionary.setEnumClass(getClassByClassName(apiDataDictionary.getEnumClassName(), classLoader));
+                });
             }
             if (StringUtils.isBlank(apiConfig.getProjectName())) {
                 apiConfig.setProjectName(projectName);
@@ -129,6 +145,13 @@ public abstract class BaseMojo extends AbstractMojo {
 
     }
 
+    /**
+     * 构建源码解析工具
+     * @param
+     * @return com.thoughtworks.qdox.JavaProjectBuilder
+     * @author zengxueqi
+     * @since 2020/5/13
+     */
     private JavaProjectBuilder buildJavaProjectBuilder() throws MojoExecutionException {
         JavaProjectBuilder javaDocBuilder = new JavaProjectBuilder();
         javaDocBuilder.setEncoding(GlobalConstants.DEFAULT_CHARSET);
@@ -141,6 +164,13 @@ public abstract class BaseMojo extends AbstractMojo {
         return javaDocBuilder;
     }
 
+    /**
+     * 加载源码依赖
+     * @param javaDocBuilder
+     * @return void
+     * @author zengxueqi
+     * @since 2020/5/13
+     */
     private void loadSourcesDependencies(JavaProjectBuilder javaDocBuilder) throws MojoExecutionException {
         try {
             List<String> currentProjectModules = getCurrentProjectArtifacts(this.project);
@@ -150,7 +180,7 @@ public abstract class BaseMojo extends AbstractMojo {
             this.rootNode = this.dependencyGraphBuilder.buildDependencyGraph(buildingRequest, artifactFilter, this.reactorProjects);
             List<DependencyNode> dependencyNodes = this.rootNode.getChildren();
             List<Artifact> artifactList = this.getArtifacts(dependencyNodes);
-            artifactList.forEach(artifact -> {
+            artifactList.stream().forEach(artifact -> {
                 if (FilterArtifact.ignoreSpringBootArtifact(artifact.getArtifactId())) {
                     return;
                 }
@@ -158,18 +188,34 @@ public abstract class BaseMojo extends AbstractMojo {
                 if (currentProjectModules.contains(artifactName)) {
                     return;
                 }
-                if (Objects.nonNull(excludes) && excludes.contains(artifactName)) {
+                if (RegexUtils.isMatches(excludes, artifactName)) {
                     return;
                 }
-                Artifact sourcesArtifact = repositorySystem.createArtifactWithClassifier(artifact.getGroupId(),
-                        artifact.getArtifactId(), artifact.getVersion(), artifact.getType(), "sources");
-                this.loadSourcesDependency(javaDocBuilder, sourcesArtifact);
+                if (RegexUtils.isMatches(includes, artifactName)) {
+                    Artifact sourcesArtifact = repositorySystem.createArtifactWithClassifier(artifact.getGroupId(),
+                            artifact.getArtifactId(), artifact.getVersion(), artifact.getType(), "sources");
+                    this.loadSourcesDependency(javaDocBuilder, sourcesArtifact);
+                    return;
+                }
+                if (CollectionUtil.isEmpty(includes)) {
+                    Artifact sourcesArtifact = repositorySystem.createArtifactWithClassifier(artifact.getGroupId(),
+                            artifact.getArtifactId(), artifact.getVersion(), artifact.getType(), "sources");
+                    this.loadSourcesDependency(javaDocBuilder, sourcesArtifact);
+                }
             });
         } catch (DependencyGraphBuilderException var4) {
             throw new MojoExecutionException("Cannot build project dependency graph", var4);
         }
     }
 
+    /**
+     * 加载源码依赖
+     * @param javaDocBuilder
+     * @param sourcesArtifact
+     * @return void
+     * @author zengxueqi
+     * @since 2020/5/13
+     */
     private void loadSourcesDependency(JavaProjectBuilder javaDocBuilder, Artifact sourcesArtifact) {
         // create request
         ArtifactResolutionRequest request = new ArtifactResolutionRequest();
@@ -180,7 +226,7 @@ public abstract class BaseMojo extends AbstractMojo {
         ArtifactResolutionResult result = repositorySystem.resolve(request);
 
         // load source file into javadoc builder
-        result.getArtifacts().forEach(artifact -> {
+        result.getArtifacts().stream().forEach(artifact -> {
             try (JarFile jarFile = new JarFile(artifact.getFile())) {
                 //getLog().info("jar:" + artifact.getFile().toURI().toURL().toString() );
                 for (Enumeration<?> entries = jarFile.entries(); entries.hasMoreElements(); ) {
@@ -197,6 +243,13 @@ public abstract class BaseMojo extends AbstractMojo {
         });
     }
 
+    /**
+     * 获取当前项目的Artifact
+     * @param project
+     * @return java.util.List<java.lang.String>
+     * @author zengxueqi
+     * @since 2020/5/13
+     */
     private List<String> getCurrentProjectArtifacts(MavenProject project) {
         if (project.hasParent()) {
             List<String> finalArtifactsName = new ArrayList<>();
@@ -231,15 +284,15 @@ public abstract class BaseMojo extends AbstractMojo {
         if (CollectionUtil.isEmpty(dependencyNodes)) {
             return artifacts;
         }
-        for (DependencyNode dependencyNode : dependencyNodes) {
-            if (FilterArtifact.ignoreArtifact(dependencyNode.getArtifact())){
-                continue;
+        dependencyNodes.stream().forEach(dependencyNode -> {
+            if (FilterArtifact.ignoreArtifact(dependencyNode.getArtifact())) {
+                return;
             }
             artifacts.add(dependencyNode.getArtifact());
             if (dependencyNode.getChildren().size() > 0) {
                 artifacts.addAll(getArtifacts(dependencyNode.getChildren()));
             }
-        }
+        });
         return artifacts;
     }
 
@@ -254,7 +307,7 @@ public abstract class BaseMojo extends AbstractMojo {
 
     private static void addSourcePaths(MavenProject project, ApiConfig apiConfig, Log log) {
         List<String> sourceRoots = project.getCompileSourceRoots();
-        sourceRoots.forEach(s -> apiConfig.setSourceCodePath(SourceCodePath.path().setPath(s)));
+        sourceRoots.stream().forEach(s -> apiConfig.setSourceCodePath(SourceCodePath.path().setPath(s)));
         if (project.hasParent()) {
             MavenProject mavenProject = project.getParent();
             if (null != mavenProject) {
