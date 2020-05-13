@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
  * @author xingzi  2020/01/09  21:18
  */
 public class FileUtil {
+
     private static String regex = "^[a-zA-Z]:";
     private static Pattern pattern = Pattern.compile(regex);
 
